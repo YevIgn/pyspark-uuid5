@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "pyspark-uuid5"
+version = "0.1.0"
+description = "Simple comparison of performance of different approaches to implement UUID5 with PySpark/Pandas/PyArrow"
+authors = ["Brend Braeckmans", "Danny Meijer", "Evgenii Ignatev <yevgeniy.ignatyev@gmail.com>"]
+readme = "README.md"
+packages = [{include = "pyspark_uuid5"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10, <3.11"
+pyspark = "3.4.0"
+pandas = "<2.0.0"
+pyarrow = "^11.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
