@@ -7,7 +7,7 @@ import pandas as pd
 import pyarrow
 from pyspark.sql import SparkSession, functions as f, DataFrame
 from pyspark.sql.pandas.functions import pandas_udf
-from pyspark.sql.types import StringType, StructField, StructType
+from pyspark.sql.types import StringType
 
 JSON_PATH = str((Path.cwd() / "string_data" / "100000_rows_with_strings.json").as_posix())
 spark = SparkSession.builder.getOrCreate()
@@ -136,34 +136,23 @@ def uuid_hash_uuid5_arrow_udf(
 ) -> DataFrame:
     source_columns = sorted(source_columns)
 
-    def add_target_column(batch: pyarrow.RecordBatch) -> pyarrow.RecordBatch:
-        schema = batch.schema
-        col_indices = [schema.get_field_index(col) for col in source_columns]
-        if any(index < 0 for index in col_indices):
-            raise ValueError("One or more source columns not found in schema")
-        col_arrays = [pyarrow.compute.cast(batch.column(index), pyarrow.string()) for index in col_indices]
-        combined_array = pyarrow.compute.binary_join_element_wise(*(col_arrays + [delimiter]))
-        schema = schema.append(pyarrow.field(target_column, pyarrow.string()))
-        arrays = batch.columns + [combined_array]
-        return pyarrow.RecordBatch.from_arrays(arrays, schema=schema)
-
     def add_uuid5_column(iterator: Iterable[pyarrow.RecordBatch]) -> Iterable[pyarrow.RecordBatch]:
-        ns = uuid.uuid5(uuid.NAMESPACE_DNS, namespace)
+        ns = uuid5_namespace(namespace)
         for batch in iterator:
-            new_batch = add_target_column(batch)
-            tgt_column_index = new_batch.schema.get_field_index(target_column)
-            tgt_column = new_batch.column(tgt_column_index)
+            tgt_column_index = batch.schema.get_field_index(target_column)
+            tgt_column = batch.column(tgt_column_index)
             uuid_array = pyarrow.array(
-                hash_uuid5(value, namespace=ns, extra_string=extra_string) for value in tgt_column.to_pylist()
+                str(uuid.uuid5(ns, value.as_py()))
+                for value in tgt_column
             )
-            arrays = new_batch.columns[:-1] + [uuid_array]
-            new_batch = pyarrow.RecordBatch.from_arrays(arrays, schema=new_batch.schema)
+            arrays = batch.columns[:-1] + [uuid_array]
+            new_batch = pyarrow.RecordBatch.from_arrays(arrays, schema=batch.schema)
             yield new_batch
 
-    output_fields = df.schema.fields.copy()
-    output_fields.append(StructField(target_column, StringType(), True))
-    output_schema = StructType(output_fields)
-    return df.mapInArrow(add_uuid5_column, output_schema)
+    cols_to_hash = f.concat_ws(delimiter, *source_columns)
+    cols_to_hash = f.concat(f.lit(extra_string), cols_to_hash)
+    df = df.withColumn(target_column, cols_to_hash)
+    return df.mapInArrow(add_uuid5_column, df.schema)
 
 
 def uuid5_pyspark(
