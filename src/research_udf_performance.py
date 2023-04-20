@@ -154,7 +154,7 @@ def uuid_hash_uuid5_arrow_udf(
             tgt_column_index = new_batch.schema.get_field_index(target_column)
             tgt_column = new_batch.column(tgt_column_index)
             uuid_array = pyarrow.array(
-                hash_uuid5(value.as_py(), namespace=ns, extra_string=extra_string) for value in tgt_column
+                hash_uuid5(value, namespace=ns, extra_string=extra_string) for value in tgt_column.to_pylist()
             )
             arrays = new_batch.columns[:-1] + [uuid_array]
             new_batch = pyarrow.RecordBatch.from_arrays(arrays, schema=new_batch.schema)
@@ -180,12 +180,17 @@ def uuid5_pyspark(
     cols_to_hash = f.encode(cols_to_hash, "utf-8")
     cols_to_hash = f.concat(ns, cols_to_hash)
     source_columns_sha1 = f.sha1(cols_to_hash)
+    variant_part = f.substring(source_columns_sha1, 17, 4)
+    variant_part = f.conv(variant_part, 16, 2)
+    variant_part = f.lpad(variant_part, 16, "0")
+    variant_part = f.concat(f.lit("10"), f.substring(variant_part, 3, 16))  # RFC 4122 variant.
+    variant_part = f.lower(f.conv(variant_part, 2, 16))
     target_col_uuid = f.concat_ws(
         "-",
         f.substring(source_columns_sha1, 1, 8),
         f.substring(source_columns_sha1, 9, 4),
         f.concat(f.lit("5"), f.substring(source_columns_sha1, 14, 3)),  # Set version.
-        f.concat(f.substring(source_columns_sha1, 17, 4)),  # ToDo: Variant isn't set correctly.
+        variant_part,
         f.substring(source_columns_sha1, 21, 12),
     )
     return df.withColumn(target_column, target_col_uuid)
