@@ -5,7 +5,7 @@ There are several versions implemented here, note that not all of them are simil
 PyArrow which was written with significant ChatGPT assistance in guiding to study specific APIs over the course
 of less than couple of hours.
 
-Performance on different datasets can vary substantially as well. Very rough estimation is that Pandas (or pure PySpark if it was an equivalent implementation)
+Performance on different datasets can vary substantially as well. Very rough estimation is that Pandas (or pure PySpark if it's actually on par)
 approach is still the most advantageous as being the easiest to read and maintain.
 
 Most of the codebase was created by Brend Braeckmans and Danny Meijer.
